@@ -1,0 +1,173 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidHex(hex) {
+      return hex is string && hex.size() >= 7 && hex.size() <= 9 && hex.matches('^#[0-9a-fA-F]{6,8}$');
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.email is string && data.email.size() <= 120 &&
+             data.currencySymbol is string && data.currencySymbol.size() >= 1 && data.currencySymbol.size() <= 5 &&
+             data.monthlyBudgetCents is int && data.monthlyBudgetCents >= 0 && data.monthlyBudgetCents <= 10000000000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAccount(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 40 &&
+             data.type in ['CHECKING', 'CASH', 'SAVINGS', 'CARD', 'INVESTMENT'] &&
+             data.balanceCents is int && data.balanceCents >= -10000000000 && data.balanceCents <= 10000000000 &&
+             isValidHex(data.colorHex) &&
+             data.primaryAccount is bool &&
+             data.archived is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.type in ['EXPENSE', 'INCOME', 'TRANSFER'] &&
+             data.amountCents is int && data.amountCents > 0 && data.amountCents <= 10000000000 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 32 &&
+             isValidId(data.accountId) &&
+             data.accountName is string && data.accountName.size() >= 1 && data.accountName.size() <= 40 &&
+             (!('toAccountId' in data) || isValidId(data.toAccountId)) &&
+             (!('toAccountName' in data) || (data.toAccountName is string && data.toAccountName.size() >= 1 && data.toAccountName.size() <= 40)) &&
+             (data.type != 'TRANSFER' || ('toAccountId' in data && 'toAccountName' in data && data.toAccountId != data.accountId)) &&
+             data.note is string && data.note.size() <= 160 &&
+             data.dateEpochMs is int && data.dateEpochMs > 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCategoryBudget(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 32 &&
+             data.limitCents is int && data.limitCents > 0 && data.limitCents <= 10000000000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'email', 'currencySymbol', 'monthlyBudgetCents', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'currencySymbol', 'monthlyBudgetCents', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'currencySymbol', 'monthlyBudgetCents', 'updatedAt'])
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /accounts/{accountId} {
+        allow get: if isOwner(userId) && isValidId(accountId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(accountId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'type', 'balanceCents', 'colorHex', 'primaryAccount', 'archived', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'type', 'balanceCents', 'colorHex', 'primaryAccount', 'archived', 'createdAt', 'updatedAt']) &&
+                         isValidAccount(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(accountId) &&
+                         isValidAccount(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (
+                           incoming().diff(existing()).affectedKeys().hasOnly(['balanceCents', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['primaryAccount', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['name', 'type', 'balanceCents', 'colorHex', 'primaryAccount', 'archived', 'updatedAt'])
+                         );
+
+        allow delete: if isOwner(userId) && isValidId(accountId);
+      }
+
+      match /transactions/{transactionId} {
+        allow get: if isOwner(userId) && isValidId(transactionId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(transactionId) &&
+                         incoming().keys().hasAll(['userId', 'type', 'amountCents', 'category', 'accountId', 'accountName', 'note', 'dateEpochMs', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'type', 'amountCents', 'category', 'accountId', 'accountName', 'toAccountId', 'toAccountName', 'note', 'dateEpochMs', 'createdAt', 'updatedAt']) &&
+                         isValidTransaction(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(transactionId) &&
+                         isValidTransaction(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (
+                           incoming().diff(existing()).affectedKeys().hasOnly(['type', 'amountCents', 'category', 'accountId', 'accountName', 'toAccountId', 'toAccountName', 'note', 'dateEpochMs', 'updatedAt'])
+                         );
+
+        allow delete: if isOwner(userId) && isValidId(transactionId);
+      }
+
+      match /budgets/{budgetId} {
+        allow get: if isOwner(userId) && isValidId(budgetId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(budgetId) &&
+                         incoming().keys().hasAll(['userId', 'category', 'limitCents', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'category', 'limitCents', 'createdAt', 'updatedAt']) &&
+                         isValidCategoryBudget(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(budgetId) &&
+                         isValidCategoryBudget(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (
+                           incoming().diff(existing()).affectedKeys().hasOnly(['category', 'limitCents', 'updatedAt'])
+                         );
+
+        allow delete: if isOwner(userId) && isValidId(budgetId);
+      }
+    }
+  }
+}

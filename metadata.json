@@ -1,0 +1,6 @@
+{
+  "name": "Finova",
+  "description": "Mobile-first personal budget tracker by Finova with ultra-fast minimal-input expense logging, multi-account balances, interactive charts, and CSV/JSON export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

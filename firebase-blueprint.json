@@ -1,0 +1,231 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User preferences, currency symbol, and overall monthly budget target.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name."
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address."
+        },
+        "currencySymbol": {
+          "type": "string",
+          "description": "Preferred currency symbol (e.g., $, €, £, ₹)."
+        },
+        "monthlyBudgetCents": {
+          "type": "integer",
+          "description": "Overall monthly spending target in cents."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "email",
+        "currencySymbol",
+        "monthlyBudgetCents",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "A user financial account such as checking, cash wallet, savings, or credit card.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "name": {
+          "type": "string",
+          "description": "Account display name."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["CHECKING", "CASH", "SAVINGS", "CARD", "INVESTMENT"],
+          "description": "Category of financial account."
+        },
+        "balanceCents": {
+          "type": "integer",
+          "description": "Current balance in cents."
+        },
+        "colorHex": {
+          "type": "string",
+          "description": "Hex color accent for the account card."
+        },
+        "primaryAccount": {
+          "type": "boolean",
+          "description": "Whether this account is pre-selected during quick logging."
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the account is archived."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "type",
+        "balanceCents",
+        "colorHex",
+        "primaryAccount",
+        "archived",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "An expense, income, or transfer entry linked to user accounts.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["EXPENSE", "INCOME", "TRANSFER"],
+          "description": "Transaction direction."
+        },
+        "amountCents": {
+          "type": "integer",
+          "description": "Positive transaction amount in cents."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category label such as Food, Transport, Bills, Salary."
+        },
+        "accountId": {
+          "type": "string",
+          "description": "Source account document ID."
+        },
+        "accountName": {
+          "type": "string",
+          "description": "Denormalized source account name for fast rendering and export."
+        },
+        "toAccountId": {
+          "type": "string",
+          "description": "Destination account document ID (present only for TRANSFER)."
+        },
+        "toAccountName": {
+          "type": "string",
+          "description": "Destination account name (present only for TRANSFER)."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional short memo."
+        },
+        "dateEpochMs": {
+          "type": "integer",
+          "description": "Client-selected transaction date in epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": [
+        "userId",
+        "type",
+        "amountCents",
+        "category",
+        "accountId",
+        "accountName",
+        "note",
+        "dateEpochMs",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CategoryBudget": {
+      "title": "CategoryBudget",
+      "description": "Monthly spending cap for a specific category.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category name."
+        },
+        "limitCents": {
+          "type": "integer",
+          "description": "Monthly budget cap in cents."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": [
+        "userId",
+        "category",
+        "limitCents",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile and budget settings document."
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/Account" },
+      "description": "User financial accounts."
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "User expense, income, and transfer ledger entries."
+    },
+    "/users/{userId}/budgets/{budgetId}": {
+      "schema": { "$ref": "#/entities/CategoryBudget" },
+      "description": "User per-category monthly spending caps."
+    }
+  }
+}
